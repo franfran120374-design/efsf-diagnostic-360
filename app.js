@@ -121,27 +121,52 @@ function showLogin() {
   }
 }
 
-$('login-btn').addEventListener('click', async () => {
+// Connexion par CODE à 6 chiffres plutôt que par lien cliquable : un lien
+// à usage unique est parfois "pré-visité" par les filtres de sécurité des
+// messageries pro (Microsoft/Google Workspace), ce qui le rend invalide
+// avant même que la personne ne clique dessus. Un code à recopier manuellement
+// ne peut pas être consommé de cette façon.
+let pendingEmail = null;
+
+async function sendCode() {
   const email = $('login-email').value.trim();
   if (!email) return;
+  pendingEmail = email;
   $('login-btn').disabled = true;
   $('login-msg').textContent = 'Envoi en cours…';
-  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
   $('login-btn').disabled = false;
-  $('login-msg').textContent = error
-    ? 'Erreur : ' + error.message
-    : `Lien envoyé à ${email} — ouvre-le depuis ta boîte mail.`;
+  if (error) { $('login-msg').textContent = 'Erreur : ' + error.message; return; }
+  $('login-msg').textContent = '';
+  $('code-sent-to').textContent = `Code envoyé à ${email} — vérifie aussi les spams.`;
+  $('step-email').style.display = 'none';
+  $('step-code').style.display = 'block';
+  $('login-code').value = '';
+  $('login-code').focus();
+}
+
+$('login-btn').addEventListener('click', sendCode);
+$('resend-btn').addEventListener('click', sendCode);
+
+$('verify-btn').addEventListener('click', async () => {
+  const code = $('login-code').value.trim();
+  if (!code || !pendingEmail) return;
+  $('verify-btn').disabled = true;
+  $('login-msg').textContent = 'Vérification…';
+  const { data, error } = await sb.auth.verifyOtp({ email: pendingEmail, token: code, type: 'email' });
+  $('verify-btn').disabled = false;
+  if (error) { debugLog('✗ Code refusé : ' + error.message); $('login-msg').textContent = 'Code incorrect ou expiré : ' + error.message; return; }
+  $('login-msg').textContent = '';
+  debugLog('✓ Code validé pour ' + data.user.email);
+  await onLoggedIn(data.user);
 });
 
 $('logout-btn').addEventListener('click', async () => {
   await sb.auth.signOut();
   currentUser = null;
+  $('step-code').style.display = 'none';
+  $('step-email').style.display = 'block';
   showLogin();
-});
-
-sb.auth.onAuthStateChange((event, session) => {
-  if (event === 'SIGNED_IN' && session) onLoggedIn(session.user);
-  if (event === 'SIGNED_OUT') showLogin();
 });
 
 // ===== VUE LISTE DES FAMILLES =====
