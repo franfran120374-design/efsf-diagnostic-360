@@ -71,25 +71,41 @@ function relTime(dateStr) {
 
 // ===== AUTH =====
 
+// Panneau de diagnostic visible sur la page — temporaire, le temps de
+// résoudre le souci de connexion (évite de dépendre des DevTools).
+function debugLog(msg) {
+  const panel = $('debug-panel');
+  if (!panel) return;
+  panel.style.display = 'block';
+  panel.textContent += (panel.textContent ? '\n' : '') + msg;
+}
+
 async function ensureProfil(user) {
-  const { data: existing } = await sb.from('profils').select('*').eq('id', user.id).maybeSingle();
-  if (existing) return existing;
+  debugLog('→ Vérification du profil pour ' + user.email);
+  const { data: existing, error: selectErr } = await sb.from('profils').select('*').eq('id', user.id).maybeSingle();
+  if (selectErr) { debugLog('✗ Erreur lecture profil : ' + selectErr.message); return null; }
+  if (existing) { debugLog('✓ Profil existant trouvé'); return existing; }
+  debugLog('→ Aucun profil, création en cours…');
   const { data: created, error } = await sb.from('profils')
     .insert({ id: user.id, nom: user.email.split('@')[0], email: user.email })
     .select().single();
-  if (error) { console.error('Création profil échouée:', error); return null; }
+  if (error) { debugLog('✗ Création profil échouée : ' + error.message); console.error('Création profil échouée:', error); return null; }
+  debugLog('✓ Profil créé');
   return created;
 }
 
 async function initSession() {
-  const { data: { session } } = await sb.auth.getSession();
-  if (session) await onLoggedIn(session.user);
-  else showLogin();
+  debugLog('Démarrage — URL : ' + window.location.href.replace(/access_token=[^&]+/, 'access_token=***'));
+  const { data: { session }, error } = await sb.auth.getSession();
+  if (error) debugLog('✗ Erreur getSession : ' + error.message);
+  if (session) { debugLog('✓ Session trouvée pour ' + session.user.email); await onLoggedIn(session.user); }
+  else { debugLog('✗ Aucune session détectée'); showLogin(); }
 }
 
 async function onLoggedIn(user) {
   currentUser = await ensureProfil(user);
-  if (!currentUser) { showLogin(); return; }
+  if (!currentUser) { debugLog('✗ onLoggedIn interrompu (pas de profil)'); showLogin(); return; }
+  debugLog('✓ Connexion réussie, ouverture de l\'appli');
   $('user-name').textContent = currentUser.nom + (currentUser.role !== 'contributeur' ? ` · ${currentUser.role}` : '');
   $('screen-login').style.display = 'none';
   $('screen-app').style.display = 'block';
@@ -99,6 +115,10 @@ async function onLoggedIn(user) {
 function showLogin() {
   $('screen-login').style.display = 'flex';
   $('screen-app').style.display = 'none';
+  const hash = new URLSearchParams(window.location.hash.slice(1));
+  if (hash.get('error')) {
+    debugLog('✗ Erreur dans le lien : ' + hash.get('error') + ' — ' + (hash.get('error_description') || ''));
+  }
 }
 
 $('login-btn').addEventListener('click', async () => {
