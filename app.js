@@ -153,18 +153,20 @@ $('verify-btn').addEventListener('click', async () => {
   if (!code || !pendingEmail) return;
   $('verify-btn').disabled = true;
   $('login-msg').textContent = 'Vérification…';
+  debugLog('→ Vérification du code pour ' + pendingEmail);
 
-  // Selon que le compte existe déjà ou vient d'être créé, Supabase attend
-  // un type différent ('email' pour une connexion, 'signup' pour une toute
-  // première inscription) — on essaie les deux plutôt que de deviner.
-  let { data, error } = await sb.auth.verifyOtp({ email: pendingEmail, token: code, type: 'email' });
-  if (error) {
-    debugLog('→ Type "email" refusé (' + error.message + '), tentative "signup"…');
-    ({ data, error } = await sb.auth.verifyOtp({ email: pendingEmail, token: code, type: 'signup' }));
-  }
+  // type: 'email' est le seul type correct pour un code envoyé par
+  // signInWithOtp (connexion ET première inscription) — un essai
+  // supplémentaire avec un mauvais type risquait de "consommer" le code
+  // à usage unique avant le bon essai, d'où la suppression du repli.
+  const { data, error } = await sb.auth.verifyOtp({ email: pendingEmail, token: code, type: 'email' });
 
   $('verify-btn').disabled = false;
-  if (error) { debugLog('✗ Code refusé (les deux types) : ' + error.message); $('login-msg').textContent = 'Code incorrect ou expiré : ' + error.message; return; }
+  if (error) {
+    debugLog('✗ Code refusé — status:' + (error.status || '?') + ' code:' + (error.code || '?') + ' message:' + error.message);
+    $('login-msg').textContent = 'Code incorrect ou expiré : ' + error.message;
+    return;
+  }
   $('login-msg').textContent = '';
   debugLog('✓ Code validé pour ' + data.user.email);
   await onLoggedIn(data.user);
