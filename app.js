@@ -10,45 +10,120 @@ const sb = window.supabase.createClient(window.SUPABASE_CONFIG.url, window.SUPAB
 // ⚠️ SOURCE UNIQUE : la popup d'aide (bouton « ❔ Aide ») est générée à partir
 // de ce tableau. Ajouter/retirer un volet ou un champ met l'aide à jour tout
 // seul, sans rien écrire ailleurs.
+const OPT_DROIT = ['Non concerné', 'À demander', 'En cours', 'Accordé']; // parcours d'un droit/aide
 const VOLETS = [
-  { id: 'medical', label: 'Médical & nutrition', color: 'bleu', champs: [
-    { key: 'etape_sevrage', label: 'Étape du sevrage', type: 'select', options: [
+  { id: 'medical', label: 'Médical & nutrition', color: 'bleu',
+    reco: "But : situer où en est l'enfant dans son sevrage et par quel dispositif il est nourri aujourd'hui. Noter l'équipe qui le suit et les prochaines échéances médicales.",
+    champs: [
+    { key: 'etape_sevrage', label: 'Étape du sevrage', type: 'select',
+      aide: "Sevrage = passage progressif de la nutrition artificielle (sonde/cathéter) vers l'alimentation par la bouche.",
+      options: [
       'Dépendance totale sonde/cathéter', 'Sevrage engagé', 'Alimentation mixte',
       'Autonomie orale quasi complète', 'Autonomie orale acquise'
     ]},
-    { key: 'type_nutrition', label: 'Type de nutrition actuel', type: 'select', options: [
+    { key: 'type_nutrition', label: 'Type de nutrition actuel', type: 'select',
+      aide: "Entérale = par une sonde dans le tube digestif (nasogastrique, gastrostomie). Parentérale = par un cathéter dans une veine.",
+      options: [
       'Sonde nasogastrique', 'Gastrostomie', 'Cathéter central (parentérale)', 'Mixte', 'Orale exclusive'
     ]},
-    { key: 'notes', label: 'Notes (suivi, RDV à venir, points de vigilance)', type: 'textarea' }
+    { key: 'equipe_suivi', label: 'Équipe hospitalière référente', type: 'text',
+      aide: "Service ou hôpital qui suit l'enfant (ex : gastro-pédiatrie du CHU)." },
+    { key: 'prochain_rdv', label: 'Prochain rendez-vous médical', type: 'text',
+      aide: "Date et spécialité connues, pour anticiper." },
+    { key: 'notes', label: 'Notes & points de vigilance', type: 'textarea',
+      aide: "Reflux, vomissements, courbe de poids, fatigue…" }
   ]},
-  { id: 'psychologique', label: 'Psychologique & oralité', color: 'rose', champs: [
-    { key: 'suivi_enfant', label: 'Suivi psy enfant en cours', type: 'checkbox' },
-    { key: 'suivi_parents', label: 'Suivi psy parents en cours', type: 'checkbox' },
+  { id: 'psychologique', label: 'Psychologique & oralité', color: 'rose',
+    reco: "L'oralité est souvent perturbée après une nutrition artificielle. On regarde le rapport de l'enfant à la nourriture ET le vécu psychologique des parents.",
+    champs: [
+    { key: 'troubles_oralite', label: "Troubles de l'oralité", type: 'select',
+      aide: "Oralité = tout ce qui touche la bouche : manger, goûter, porter à la bouche. Des blocages sont fréquents après une sonde.",
+      options: ['Aucun repéré', 'Légers', 'Modérés', 'Importants'] },
+    { key: 'suivi_enfant', label: "Suivi psychologique de l'enfant", type: 'select',
+      options: ['Aucun', 'Souhaité', 'En cours'] },
+    { key: 'type_suivi', label: 'Professionnel qui accompagne', type: 'select',
+      aide: "Qui suit l'enfant pour l'oralité / le développement.",
+      options: ['Orthophoniste', 'Psychologue', 'Psychomotricien', 'Ergothérapeute', 'Autre'] },
+    { key: 'suivi_parents', label: 'Soutien psychologique des parents', type: 'select',
+      options: ['Aucun', 'Souhaité', 'En cours'] },
     { key: 'notes', label: 'Notes', type: 'textarea' }
   ]},
-  { id: 'social', label: 'Social & familial', color: 'vert', champs: [
-    { key: 'droits_ouverts', label: 'Droits ouverts (AEEH, PCH, CMI...)', type: 'text' },
-    { key: 'logement_adapte', label: 'Logement adapté', type: 'checkbox' },
+  { id: 'social', label: 'Social & familial', color: 'vert',
+    reco: "Vérifier que les aides financières liées au handicap/à la maladie sont bien ouvertes, et repérer un éventuel isolement de la famille.",
+    champs: [
+    { key: 'aeeh', label: 'AEEH', type: 'select', options: OPT_DROIT,
+      aide: "AEEH = Allocation d'éducation de l'enfant handicapé, versée par la CAF." },
+    { key: 'pch', label: 'PCH', type: 'select', options: OPT_DROIT,
+      aide: "PCH = Prestation de compensation du handicap, versée par le département via la MDPH." },
+    { key: 'cmi', label: 'CMI', type: 'select', options: OPT_DROIT,
+      aide: "CMI = Carte mobilité inclusion (stationnement, priorité, invalidité)." },
+    { key: 'logement_adapte', label: 'Logement adapté aux besoins', type: 'select',
+      options: ['Oui', 'Non', 'À adapter'] },
+    { key: 'isolement', label: 'Isolement de la famille', type: 'select',
+      aide: "Entourage et relais disponibles autour des parents (famille, amis, aidants).",
+      options: ['Non', 'Léger', 'Important'] },
     { key: 'notes', label: 'Notes', type: 'textarea' }
   ]},
-  { id: 'scolaire', label: 'Scolaire & petite enfance', color: 'orange', champs: [
-    { key: 'mode_garde', label: 'Mode de garde / scolarisation', type: 'text' },
-    { key: 'pai_en_place', label: 'PAI en place', type: 'checkbox' },
+  { id: 'scolaire', label: 'Scolaire & petite enfance', color: 'orange',
+    reco: "Mode d'accueil de l'enfant et adaptations mises en place pour sa santé et ses éventuels besoins particuliers.",
+    champs: [
+    { key: 'mode_garde', label: 'Mode de garde / scolarisation', type: 'select',
+      options: ['Domicile (parent)', 'Assistante maternelle', 'Crèche', 'École maternelle', 'École élémentaire', 'Autre'] },
+    { key: 'pai', label: 'PAI', type: 'select',
+      aide: "PAI = Projet d'accueil individualisé : protocole avec la crèche/l'école pour gérer la santé de l'enfant (repas, sonde, conduite d'urgence).",
+      options: ['Non nécessaire', 'À mettre en place', 'En cours', 'En place'] },
+    { key: 'aesh', label: 'AESH', type: 'select', options: ['Non concerné', 'À demander', 'En cours', 'En place'],
+      aide: "AESH = Accompagnant d'élève en situation de handicap (aide humaine à l'école)." },
     { key: 'notes', label: 'Notes', type: 'textarea' }
   ]},
-  { id: 'fratrie', label: 'Fratrie', color: 'violet', champs: [
-    { key: 'impact_repere', label: 'Impact repéré sur la fratrie', type: 'checkbox' },
+  { id: 'fratrie', label: 'Fratrie', color: 'violet',
+    reco: "Les frères et sœurs sont souvent impactés (attention monopolisée, angoisses, jalousie). On repère un éventuel besoin de soutien.",
+    champs: [
+    { key: 'presence_fratrie', label: 'Frères et sœurs', type: 'select',
+      options: ['Enfant unique', '1 frère/sœur', '2 ou plus'] },
+    { key: 'impact', label: 'Impact repéré sur la fratrie', type: 'select',
+      options: ['Non repéré', 'À surveiller', 'Impact repéré'] },
+    { key: 'soutien', label: 'Soutien pour la fratrie', type: 'select',
+      options: ['Non nécessaire', 'Souhaité', 'En place'] },
     { key: 'notes', label: 'Notes', type: 'textarea' }
   ]},
-  { id: 'administratif', label: 'Administratif & droits', color: 'bleu', champs: [
-    { key: 'dossier_mdph', label: 'Dossier MDPH', type: 'select', options: ['Aucun', 'En cours', 'Accepté', 'À renouveler'] },
+  { id: 'administratif', label: 'Administratif & droits', color: 'bleu',
+    reco: "Suivre les dossiers MDPH et les échéances de renouvellement, pour éviter toute rupture de droits.",
+    champs: [
+    { key: 'dossier_mdph', label: 'Dossier MDPH', type: 'select',
+      aide: "MDPH = Maison départementale des personnes handicapées : elle instruit l'AEEH, la PCH, la CMI et les orientations.",
+      options: ['Aucun', 'En cours', 'Accepté', 'À renouveler'] },
+    { key: 'echeance', label: 'Prochaine échéance / renouvellement', type: 'text',
+      aide: "Date à surveiller pour ne pas perdre un droit (fin de validité AEEH, PCH…)." },
+    { key: 'besoin_aide_dossier', label: 'Besoin d\'aide pour les démarches', type: 'select',
+      options: ['Non', 'Oui — à accompagner'] },
     { key: 'notes', label: 'Notes', type: 'textarea' }
   ]},
-  { id: 'accompagnement', label: 'Accompagnement EFSF', color: 'rose', champs: [
-    { key: 'referent', label: 'Bénévole(s) référent(s)', type: 'text' },
+  { id: 'accompagnement', label: 'Accompagnement EFSF', color: 'rose',
+    reco: "Qui suit la famille côté EFSF, à quel rythme, et quelles sont les priorités du moment.",
+    champs: [
+    { key: 'referent', label: 'Bénévole(s) référent(s)', type: 'text',
+      aide: "Prénom(s) du/des bénévole(s) qui suivent cette famille." },
+    { key: 'frequence', label: 'Fréquence de contact', type: 'select',
+      options: ['Hebdomadaire', 'Toutes les deux semaines', 'Mensuelle', 'Ponctuelle'] },
+    { key: 'priorite', label: 'Priorité du moment', type: 'select',
+      options: ['Médical', 'Psychologique', 'Social', 'Scolaire', 'Administratif', 'Écoute / soutien'] },
     { key: 'actions_en_cours', label: 'Actions en cours', type: 'textarea' },
     { key: 'notes', label: 'Notes', type: 'textarea' }
   ]}
+];
+
+// Glossaire affiché dans la popup Aide (source unique aussi).
+const ACRONYMES = [
+  { sigle: 'AEEH', sens: "Allocation d'éducation de l'enfant handicapé (versée par la CAF)." },
+  { sigle: 'PCH', sens: 'Prestation de compensation du handicap (département, via la MDPH).' },
+  { sigle: 'CMI', sens: 'Carte mobilité inclusion (stationnement, priorité, invalidité).' },
+  { sigle: 'MDPH', sens: 'Maison départementale des personnes handicapées (instruit AEEH, PCH, CMI, orientations).' },
+  { sigle: 'PAI', sens: "Projet d'accueil individualisé (protocole santé avec la crèche/l'école)." },
+  { sigle: 'AESH', sens: "Accompagnant d'élève en situation de handicap (aide humaine à l'école)." },
+  { sigle: 'Nutrition entérale', sens: 'Alimentation par une sonde digestive (nasogastrique, gastrostomie).' },
+  { sigle: 'Nutrition parentérale', sens: 'Alimentation par un cathéter dans une veine.' },
+  { sigle: 'Oralité', sens: "Rapport à la bouche et à l'alimentation (manger, goûter, porter à la bouche)." }
 ];
 
 // Les 3 rôles — SOURCE UNIQUE aussi (aide + écran Coordination). Modifier
@@ -66,7 +141,7 @@ function roleLabel(id) { const r = ROLES.find(r => r.id === id); return r ? r.la
 // Date de la dernière évolution du contenu du guide (à bumper quand on
 // change le texte d'intro / confidentialité — pas nécessaire pour les
 // volets/rôles, qui se régénèrent seuls).
-const GUIDE_MAJ = '7 juillet 2026';
+const GUIDE_MAJ = '7 juillet 2026 (volets enrichis : menus déroulants, aides, glossaire)';
 
 let currentUser = null;
 let currentFamilleId = null;
@@ -257,6 +332,10 @@ function openHelp() {
 
     <h3 class="help-h3">Qui voit quoi — les rôles</h3>
     <div class="help-roles">${roles}</div>
+
+    <h3 class="help-h3">Glossaire</h3>
+    <div class="help-glossaire">${ACRONYMES.map(a => `
+      <div class="help-acro"><span class="help-acro-sigle">${esc(a.sigle)}</span>${esc(a.sens)}</div>`).join('')}</div>
 
     <h3 class="help-h3">Confidentialité</h3>
     <p class="help-note">Aucun nom de famille complet n'est stocké : seulement un code famille
@@ -469,22 +548,23 @@ function openEntryModal(voletId) {
   currentVoletId = voletId;
   const volet = VOLETS.find(v => v.id === voletId);
   $('entry-modal-title').textContent = volet.label;
-  $('entry-fields').innerHTML = volet.champs.map(c => {
+  const recoHtml = volet.reco ? `<div class="volet-reco">🎯 ${esc(volet.reco)}</div>` : '';
+  $('entry-fields').innerHTML = recoHtml + volet.champs.map(c => {
     if (c.type === 'select') {
-      return `<label class="field-label">${esc(c.label)}</label>
+      return `<label class="field-label">${esc(c.label)}</label>${aideHtml(c)}
         <select class="input" data-key="${c.key}">
           <option value="">—</option>
           ${c.options.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('')}
         </select>`;
     }
     if (c.type === 'checkbox') {
-      return `<label class="checkbox-line"><input type="checkbox" data-key="${c.key}"> ${esc(c.label)}</label>`;
+      return `<label class="checkbox-line"><input type="checkbox" data-key="${c.key}"> ${esc(c.label)}</label>${aideHtml(c)}`;
     }
     if (c.type === 'textarea') {
-      return `<label class="field-label">${esc(c.label)}</label>
+      return `<label class="field-label">${esc(c.label)}</label>${aideHtml(c)}
         <textarea class="input" data-key="${c.key}"></textarea>`;
     }
-    return `<label class="field-label">${esc(c.label)}</label>
+    return `<label class="field-label">${esc(c.label)}</label>${aideHtml(c)}
       <input type="text" class="input" data-key="${c.key}">`;
   }).join('');
   $('modal-entry').style.display = 'flex';
@@ -541,23 +621,27 @@ async function startEntretien() {
   $('modal-entretien').style.display = 'flex';
 }
 
+function aideHtml(c) {
+  return c.aide ? `<div class="champ-aide">💡 ${esc(c.aide)}</div>` : '';
+}
+
 function champField(c, value) {
   const v = value == null ? '' : value;
   if (c.type === 'select') {
-    return `<label class="field-label big">${esc(c.label)}</label>
+    return `<label class="field-label big">${esc(c.label)}</label>${aideHtml(c)}
       <select class="input big" data-key="${c.key}">
         <option value="">—</option>
         ${c.options.map(o => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}
       </select>`;
   }
   if (c.type === 'checkbox') {
-    return `<label class="checkbox-line big"><input type="checkbox" data-key="${c.key}" ${v === true ? 'checked' : ''}> ${esc(c.label)}</label>`;
+    return `<label class="checkbox-line big"><input type="checkbox" data-key="${c.key}" ${v === true ? 'checked' : ''}> ${esc(c.label)}</label>${aideHtml(c)}`;
   }
   if (c.type === 'textarea') {
-    return `<label class="field-label big">${esc(c.label)}</label>
+    return `<label class="field-label big">${esc(c.label)}</label>${aideHtml(c)}
       <textarea class="input big" data-key="${c.key}">${esc(v)}</textarea>`;
   }
-  return `<label class="field-label big">${esc(c.label)}</label>
+  return `<label class="field-label big">${esc(c.label)}</label>${aideHtml(c)}
     <input type="text" class="input big" data-key="${c.key}" value="${esc(v)}">`;
 }
 
@@ -567,7 +651,8 @@ function renderEntretienStep() {
   $('entretien-volet-title').textContent = volet.label;
   $('entretien-progress-text').textContent = `Volet ${entretienStep + 1} / ${VOLETS.length}`;
   $('entretien-progress-bar').style.width = `${((entretienStep + 1) / VOLETS.length) * 100}%`;
-  $('entretien-fields').innerHTML = volet.champs.map(c => champField(c, data[c.key])).join('');
+  const recoHtml = volet.reco ? `<div class="volet-reco">🎯 ${esc(volet.reco)}</div>` : '';
+  $('entretien-fields').innerHTML = recoHtml + volet.champs.map(c => champField(c, data[c.key])).join('');
   $('entretien-fields').scrollTop = 0;
   $('entretien-prev').style.visibility = entretienStep === 0 ? 'hidden' : 'visible';
   $('entretien-next').textContent = entretienStep === VOLETS.length - 1 ? "Terminer l'entretien ✓" : 'Suivant →';
