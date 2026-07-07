@@ -59,6 +59,12 @@
         <h1 id="famille-title">—</h1>
         <div id="famille-meta" class="famille-meta"></div>
       </div>
+      <div class="famille-actions">
+        <button id="entretien-btn" class="btn btn-primary">🎙️ Mode entretien</button>
+        <button id="export-pdf-btn" class="btn-ghost">🖨️ Exporter en PDF</button>
+        <button id="effacer-sante-btn" class="btn-ghost btn-warn">🧹 Effacer les données de santé</button>
+        <button id="supprimer-fiche-btn" class="btn-ghost btn-danger-link">Supprimer la fiche</button>
+      </div>
       <div id="volets-container" class="volets-grid"></div>
     </main>
   </div>
@@ -137,6 +143,31 @@
       </div>
     </div>
   </div>
+
+  <!-- ===== ASSISTANT ENTRETIEN (plein écran, pas à pas) ===== -->
+  <div id="modal-entretien" class="modal-backdrop entretien-backdrop" style="display:none">
+    <div class="entretien">
+      <div class="entretien-head">
+        <div>
+          <div id="entretien-famille" class="entretien-famille">—</div>
+          <div id="entretien-progress-text" class="entretien-progress-text"></div>
+        </div>
+        <button id="entretien-close" class="btn-ghost">Fermer</button>
+      </div>
+      <div class="entretien-progress"><div id="entretien-progress-bar" class="entretien-progress-bar"></div></div>
+      <div class="entretien-body">
+        <h2 id="entretien-volet-title" class="entretien-volet-title">—</h2>
+        <div id="entretien-fields"></div>
+      </div>
+      <div class="entretien-foot">
+        <button id="entretien-prev" class="btn-ghost">← Précédent</button>
+        <button id="entretien-next" class="btn btn-primary">Suivant →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Zone d'impression PDF (masquée à l'écran, visible seulement à l'impression) -->
+  <div id="print-area" style="display:none"></div>
 
   <script src="config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

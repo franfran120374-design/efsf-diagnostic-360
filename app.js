@@ -516,5 +516,172 @@ $('save-entry-btn').addEventListener('click', async () => {
   renderVolets(currentFamilleId);
 });
 
+// ===== MODE ENTRETIEN (assistant pas à pas) =====
+// Déroule les 7 volets un par un, grands champs préremplis, pensé pour
+// conduire l'entretien en visio. « Terminer » enregistre tout d'un coup.
+
+let entretienStep = 0;
+let entretienData = {};
+
+function latestByVolet(entries) {
+  const map = {};
+  (entries || []).forEach(e => { if (!map[e.volet]) map[e.volet] = e.contenu; });
+  return map;
+}
+
+async function startEntretien() {
+  const { data: entries } = await sb.from('volet_entries')
+    .select('*').eq('famille_id', currentFamilleId).order('created_at', { ascending: false });
+  const latest = latestByVolet(entries);
+  entretienData = {};
+  VOLETS.forEach(v => { entretienData[v.id] = Object.assign({}, latest[v.id] || {}); });
+  entretienStep = 0;
+  $('entretien-famille').textContent = $('famille-title').textContent;
+  renderEntretienStep();
+  $('modal-entretien').style.display = 'flex';
+}
+
+function champField(c, value) {
+  const v = value == null ? '' : value;
+  if (c.type === 'select') {
+    return `<label class="field-label big">${esc(c.label)}</label>
+      <select class="input big" data-key="${c.key}">
+        <option value="">—</option>
+        ${c.options.map(o => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}
+      </select>`;
+  }
+  if (c.type === 'checkbox') {
+    return `<label class="checkbox-line big"><input type="checkbox" data-key="${c.key}" ${v === true ? 'checked' : ''}> ${esc(c.label)}</label>`;
+  }
+  if (c.type === 'textarea') {
+    return `<label class="field-label big">${esc(c.label)}</label>
+      <textarea class="input big" data-key="${c.key}">${esc(v)}</textarea>`;
+  }
+  return `<label class="field-label big">${esc(c.label)}</label>
+    <input type="text" class="input big" data-key="${c.key}" value="${esc(v)}">`;
+}
+
+function renderEntretienStep() {
+  const volet = VOLETS[entretienStep];
+  const data = entretienData[volet.id] || {};
+  $('entretien-volet-title').textContent = volet.label;
+  $('entretien-progress-text').textContent = `Volet ${entretienStep + 1} / ${VOLETS.length}`;
+  $('entretien-progress-bar').style.width = `${((entretienStep + 1) / VOLETS.length) * 100}%`;
+  $('entretien-fields').innerHTML = volet.champs.map(c => champField(c, data[c.key])).join('');
+  $('entretien-fields').scrollTop = 0;
+  $('entretien-prev').style.visibility = entretienStep === 0 ? 'hidden' : 'visible';
+  $('entretien-next').textContent = entretienStep === VOLETS.length - 1 ? "Terminer l'entretien ✓" : 'Suivant →';
+}
+
+function collectEntretienStep() {
+  const volet = VOLETS[entretienStep];
+  const contenu = entretienData[volet.id] || {};
+  volet.champs.forEach(c => {
+    const el = document.querySelector(`#entretien-fields [data-key="${c.key}"]`);
+    if (!el) return;
+    contenu[c.key] = c.type === 'checkbox' ? el.checked : el.value.trim();
+  });
+  entretienData[volet.id] = contenu;
+}
+
+function hasContent(contenu) {
+  return Object.values(contenu || {}).some(v => v !== '' && v !== false && v != null);
+}
+
+async function finishEntretien() {
+  collectEntretienStep();
+  const rows = [];
+  VOLETS.forEach(v => {
+    if (hasContent(entretienData[v.id])) {
+      rows.push({ famille_id: currentFamilleId, volet: v.id, contenu: entretienData[v.id], auteur_id: currentUser.id });
+    }
+  });
+  if (rows.length) {
+    const { error } = await sb.from('volet_entries').insert(rows);
+    if (error) { alert("Erreur à l'enregistrement : " + error.message); return; }
+    await sb.from('journal_acces').insert(rows.map(r => ({
+      famille_id: currentFamilleId, profil_id: currentUser.id, action: 'modification', volet: r.volet
+    })));
+  }
+  $('modal-entretien').style.display = 'none';
+  renderVolets(currentFamilleId);
+}
+
+$('entretien-btn').addEventListener('click', startEntretien);
+$('entretien-close').addEventListener('click', () => {
+  if (confirm('Fermer l\'entretien ? Les réponses non enregistrées (bouton « Terminer ») seront perdues.')) {
+    $('modal-entretien').style.display = 'none';
+  }
+});
+$('entretien-prev').addEventListener('click', () => {
+  collectEntretienStep();
+  if (entretienStep > 0) { entretienStep--; renderEntretienStep(); }
+});
+$('entretien-next').addEventListener('click', () => {
+  if (entretienStep === VOLETS.length - 1) { finishEntretien(); return; }
+  collectEntretienStep();
+  entretienStep++;
+  renderEntretienStep();
+});
+
+// ===== EXPORT PDF (impression navigateur) =====
+
+async function exportPdf() {
+  const { data: famille, error: fErr } = await sb.from('familles').select('*').eq('id', currentFamilleId).single();
+  if (fErr) { alert('Erreur : ' + fErr.message); return; }
+  const { data: entries } = await sb.from('volet_entries')
+    .select('*').eq('famille_id', currentFamilleId).order('created_at', { ascending: false });
+  const latest = latestByVolet(entries);
+  const today = new Date().toLocaleDateString('fr-FR');
+
+  const voletsHtml = VOLETS.map(v => {
+    const c = latest[v.id];
+    const lignes = c ? v.champs
+      .filter(ch => c[ch.key] !== undefined && c[ch.key] !== '' && c[ch.key] !== false)
+      .map(ch => `<div class="pa-champ"><span class="pa-k">${esc(ch.label)} :</span> ${ch.type === 'checkbox' ? 'Oui' : esc(c[ch.key])}</div>`)
+      .join('') : '';
+    return `<div class="pa-volet"><h3>${esc(v.label)}</h3>${lignes || '<div class="pa-empty">— non renseigné —</div>'}</div>`;
+  }).join('');
+
+  $('print-area').innerHTML = `
+    <div class="pa-head">
+      <div class="pa-title">Diagnostic 360° — Pôle Familles EFSF</div>
+      <div class="pa-sub">${esc(famille.code_famille)} — ${esc(famille.prenom_enfant || '')} · édité le ${esc(today)}</div>
+    </div>
+    ${voletsHtml}
+    <div class="pa-foot">Document confidentiel — données de santé. À conserver dans un espace sécurisé
+    et à détruire selon votre politique de conservation. Aucun nom de famille complet n'y figure.</div>`;
+  $('print-area').style.display = 'block';
+
+  await sb.from('journal_acces').insert({ famille_id: currentFamilleId, profil_id: currentUser.id, action: 'export_pdf' });
+  window.print();
+}
+window.addEventListener('afterprint', () => { const pa = $('print-area'); if (pa) pa.style.display = 'none'; });
+
+// ===== EFFACEMENT DES DONNÉES DE SANTÉ =====
+
+async function effacerDonneesSante() {
+  if (!confirm(
+    "⚠️ Effacer DÉFINITIVEMENT le contenu des 7 volets de cette famille (données de santé) ?\n\n" +
+    "La fiche (code, prénom, consentement) est conservée, vide.\n\n" +
+    "As-tu bien exporté le PDF AVANT ? Cette action est irréversible.")) return;
+  const { error } = await sb.rpc('effacer_donnees_sante', { fid: currentFamilleId });
+  if (error) { alert('Erreur : ' + error.message); return; }
+  renderVolets(currentFamilleId);
+  alert('Données de santé effacées. La fiche est conservée, prête pour un prochain entretien.');
+}
+
+async function supprimerFiche() {
+  if (!confirm("⚠️ Supprimer TOUTE la fiche (code, prénom, volets, historique) ? Irréversible.")) return;
+  if (!confirm('Dernière confirmation : tout sera définitivement supprimé. Continuer ?')) return;
+  const { error } = await sb.from('familles').delete().eq('id', currentFamilleId);
+  if (error) { alert('Erreur : ' + error.message); return; }
+  showListView();
+}
+
+$('export-pdf-btn').addEventListener('click', exportPdf);
+$('effacer-sante-btn').addEventListener('click', effacerDonneesSante);
+$('supprimer-fiche-btn').addEventListener('click', supprimerFiche);
+
 // ===== DÉMARRAGE =====
 initSession();
