@@ -7,6 +7,9 @@ const sb = window.supabase.createClient(window.SUPABASE_CONFIG.url, window.SUPAB
 
 // Les 7 volets du diagnostic — modifie ce tableau pour ajuster les champs
 // sans toucher au reste de la logique.
+// ⚠️ SOURCE UNIQUE : la popup d'aide (bouton « ❔ Aide ») est générée à partir
+// de ce tableau. Ajouter/retirer un volet ou un champ met l'aide à jour tout
+// seul, sans rien écrire ailleurs.
 const VOLETS = [
   { id: 'medical', label: 'Médical & nutrition', color: 'bleu', champs: [
     { key: 'etape_sevrage', label: 'Étape du sevrage', type: 'select', options: [
@@ -48,6 +51,23 @@ const VOLETS = [
   ]}
 ];
 
+// Les 3 rôles — SOURCE UNIQUE aussi (aide + écran Coordination). Modifier
+// ici met à jour l'explication des rôles dans la popup automatiquement.
+const ROLES = [
+  { id: 'coordinateur', label: 'Coordinateur',
+    desc: "Voit toutes les familles, gère les accès et les rôles, exporte les synthèses." },
+  { id: 'benevole_referent', label: 'Bénévole référent',
+    desc: "Crée des fiches familles et remplit tous les volets de ses propres familles." },
+  { id: 'contributeur', label: 'Contributeur',
+    desc: "Accès uniquement aux volets précis d'une famille pour lesquels il a été invité (ex : un pro sur le seul volet médical)." }
+];
+function roleLabel(id) { const r = ROLES.find(r => r.id === id); return r ? r.label : id; }
+
+// Date de la dernière évolution du contenu du guide (à bumper quand on
+// change le texte d'intro / confidentialité — pas nécessaire pour les
+// volets/rôles, qui se régénèrent seuls).
+const GUIDE_MAJ = '7 juillet 2026';
+
 let currentUser = null;
 let currentFamilleId = null;
 let currentVoletId = null;
@@ -71,42 +91,56 @@ function relTime(dateStr) {
 
 // ===== AUTH =====
 
-// Panneau de diagnostic visible sur la page — temporaire, le temps de
-// résoudre le souci de connexion (évite de dépendre des DevTools).
+// Panneau de diagnostic — désactivé par défaut. Il ne s'affiche que si on
+// ouvre l'appli avec ?debug=1 dans l'URL (pour ne jamais exposer d'e-mails
+// ni d'infos de session sur l'écran de connexion en usage normal).
+const DEBUG = new URLSearchParams(location.search).get('debug') === '1';
 function debugLog(msg) {
+  if (!DEBUG) return;
   const panel = $('debug-panel');
   if (!panel) return;
   panel.style.display = 'block';
   panel.textContent += (panel.textContent ? '\n' : '') + msg;
 }
 
-async function ensureProfil(user) {
-  debugLog('→ Vérification du profil pour ' + user.email);
-  const { data: existing, error: selectErr } = await sb.from('profils').select('*').eq('id', user.id).maybeSingle();
-  if (selectErr) { debugLog('✗ Erreur lecture profil : ' + selectErr.message); return null; }
-  if (existing) { debugLog('✓ Profil existant trouvé'); return existing; }
-  debugLog('→ Aucun profil, création en cours…');
-  const { data: created, error } = await sb.from('profils')
-    .insert({ id: user.id, nom: user.email.split('@')[0], email: user.email })
-    .select().single();
-  if (error) { debugLog('✗ Création profil échouée : ' + error.message); console.error('Création profil échouée:', error); return null; }
-  debugLog('✓ Profil créé');
-  return created;
+// Récupère le profil (créé côté base par le trigger à l'inscription).
+// Aucun insert ici : le rôle ne peut donc pas être auto-attribué depuis le
+// navigateur. Petite boucle de retry le temps que le trigger ait tourné.
+async function fetchProfil(user, tries = 4) {
+  for (let i = 0; i < tries; i++) {
+    const { data, error } = await sb.from('profils').select('*').eq('id', user.id).maybeSingle();
+    if (error) debugLog('lecture profil : ' + error.message);
+    if (data) return data;
+    await new Promise(r => setTimeout(r, 400));
+  }
+  return null;
 }
 
 async function initSession() {
-  debugLog('Démarrage — URL : ' + window.location.href.replace(/access_token=[^&]+/, 'access_token=***'));
+  debugLog('Démarrage');
   const { data: { session }, error } = await sb.auth.getSession();
-  if (error) debugLog('✗ Erreur getSession : ' + error.message);
-  if (session) { debugLog('✓ Session trouvée pour ' + session.user.email); await onLoggedIn(session.user); }
-  else { debugLog('✗ Aucune session détectée'); showLogin(); }
+  if (error) debugLog('getSession : ' + error.message);
+  if (session) { debugLog('session trouvée'); await onLoggedIn(session.user); }
+  else { debugLog('aucune session'); showLogin(); }
 }
 
 async function onLoggedIn(user) {
-  currentUser = await ensureProfil(user);
-  if (!currentUser) { debugLog('✗ onLoggedIn interrompu (pas de profil)'); showLogin(); return; }
-  debugLog('✓ Connexion réussie, ouverture de l\'appli');
-  $('user-name').textContent = currentUser.nom + (currentUser.role !== 'contributeur' ? ` · ${currentUser.role}` : '');
+  currentUser = await fetchProfil(user);
+  if (!currentUser) {
+    // Compte authentifié mais e-mail non pré-inscrit → aucun accès.
+    debugLog('profil absent : accès non autorisé');
+    await sb.auth.signOut();
+    setMode('login');
+    showLogin();
+    $('login-msg').textContent =
+      "Ton accès n'est pas encore autorisé. Demande à la coordinatrice de t'ajouter à la liste, puis reconnecte-toi.";
+    return;
+  }
+  debugLog('connexion réussie');
+  $('user-name').textContent =
+    currentUser.nom + (currentUser.role !== 'contributeur' ? ` · ${roleLabel(currentUser.role)}` : '');
+  // Écran Coordination réservé à la coordinatrice.
+  $('coord-btn').style.display = currentUser.role === 'coordinateur' ? '' : 'none';
   $('screen-login').style.display = 'none';
   $('screen-app').style.display = 'block';
   showListView();
@@ -117,7 +151,7 @@ function showLogin() {
   $('screen-app').style.display = 'none';
   const hash = new URLSearchParams(window.location.hash.slice(1));
   if (hash.get('error')) {
-    debugLog('✗ Erreur dans le lien : ' + hash.get('error') + ' — ' + (hash.get('error_description') || ''));
+    debugLog('erreur lien : ' + hash.get('error'));
   }
 }
 
@@ -146,14 +180,14 @@ function setMode(m) {
 $('signup-toggle').addEventListener('click', () => setMode(mode === 'login' ? 'signup' : 'login'));
 
 async function submitAuth() {
-  const email = $('login-email').value.trim();
+  const email = $('login-email').value.trim().toLowerCase();
   const password = $('login-password').value;
   if (!email || !password) { $('login-msg').textContent = 'E-mail et mot de passe requis.'; return; }
   if (mode === 'signup' && password.length < 6) { $('login-msg').textContent = 'Le mot de passe doit faire au moins 6 caractères.'; return; }
 
   $('login-btn').disabled = true;
   $('login-msg').textContent = mode === 'signup' ? 'Création…' : 'Connexion…';
-  debugLog('→ ' + (mode === 'signup' ? 'Création' : 'Connexion') + ' pour ' + email);
+  debugLog(mode === 'signup' ? 'création…' : 'connexion…');
 
   let data, error;
   try {
@@ -167,8 +201,7 @@ async function submitAuth() {
   $('login-btn').disabled = false;
 
   if (error) {
-    debugLog('✗ Échec — status:' + (error.status || '?') + ' code:' + (error.code || '?') + ' message:' + error.message);
-    // Messages plus clairs pour les cas fréquents
+    debugLog('échec — status:' + (error.status || '?') + ' code:' + (error.code || '?'));
     if (error.message && /already registered/i.test(error.message)) {
       $('login-msg').textContent = 'Ce compte existe déjà — clique sur « J\'ai déjà un accès » pour te connecter.';
     } else if (error.message && /Invalid login credentials/i.test(error.message)) {
@@ -181,13 +214,13 @@ async function submitAuth() {
 
   if (!data.session) {
     // Cas où la confirmation e-mail est encore activée côté Supabase
-    debugLog('✗ Pas de session (confirmation e-mail probablement activée)');
+    debugLog('pas de session (confirmation e-mail probablement activée)');
     $('login-msg').textContent = 'Compte créé, mais la confirmation par e-mail est activée. Désactive-la dans Supabase pour une connexion directe.';
     return;
   }
 
   $('login-msg').textContent = '';
-  debugLog('✓ Authentifié : ' + data.user.email);
+  debugLog('authentifié');
   await onLoggedIn(data.user);
 }
 
@@ -199,6 +232,128 @@ $('logout-btn').addEventListener('click', async () => {
   currentUser = null;
   showLogin();
 });
+
+// ===== POPUP AIDE (générée depuis VOLETS + ROLES) =====
+// Se met à jour toute seule : elle lit les mêmes tableaux que l'appli, donc
+// elle reflète toujours les volets et rôles réellement en place.
+
+function openHelp() {
+  const volets = VOLETS.map(v => `
+    <div class="help-volet c-${v.color}">
+      <div class="help-volet-title">${esc(v.label)}</div>
+      <div class="help-volet-champs">${v.champs.map(c => esc(c.label)).join(' · ')}</div>
+    </div>`).join('');
+  const roles = ROLES.map(r => `
+    <div class="help-role">
+      <span class="role-chip role-${r.id}">${esc(r.label)}</span>
+      <div class="help-role-desc">${esc(r.desc)}</div>
+    </div>`).join('');
+  $('help-body').innerHTML = `
+    <p class="help-intro">Le Diagnostic 360° fait le tour de l'accompagnement d'un enfant et de sa
+    famille, volet par volet, pour n'en oublier aucun.</p>
+
+    <h3 class="help-h3">Les ${VOLETS.length} volets</h3>
+    <div class="help-volets">${volets}</div>
+
+    <h3 class="help-h3">Qui voit quoi — les rôles</h3>
+    <div class="help-roles">${roles}</div>
+
+    <h3 class="help-h3">Confidentialité</h3>
+    <p class="help-note">Aucun nom de famille complet n'est stocké : seulement un code famille
+    (ex : F-2026-014) et le prénom de l'enfant. Chaque consultation, modification ou export est
+    tracé. Un contributeur ne voit que les volets pour lesquels il a été explicitement invité, et
+    personne ne peut se donner un rôle à soi-même.</p>
+
+    <div class="help-maj">🔄 Ce guide est généré automatiquement à partir de la configuration de
+    l'appli : il reste toujours à jour quand les volets ou les rôles changent. Dernière évolution
+    du texte : ${esc(GUIDE_MAJ)}.</div>`;
+  $('modal-help').style.display = 'flex';
+}
+
+$('help-btn').addEventListener('click', openHelp);
+$('close-help-btn').addEventListener('click', () => { $('modal-help').style.display = 'none'; });
+
+// ===== ÉCRAN COORDINATION (coordinateur uniquement) =====
+
+async function openCoord() {
+  if (!currentUser || currentUser.role !== 'coordinateur') return;
+  $('coord-msg').textContent = '';
+  $('modal-coord').style.display = 'flex';
+  // Remplir le sélecteur de rôle du formulaire d'ajout
+  $('coord-new-role').innerHTML = ROLES.map(r => `<option value="${r.id}">${esc(r.label)}</option>`).join('');
+  await renderPreattrib();
+  await renderComptes();
+}
+
+async function renderPreattrib() {
+  const { data, error } = await sb.from('roles_preattribues').select('*').order('created_at', { ascending: false });
+  const box = $('coord-preattrib-list');
+  if (error) { box.innerHTML = `<div class="coord-empty">Erreur : ${esc(error.message)}</div>`; return; }
+  if (!data.length) { box.innerHTML = '<div class="coord-empty">Aucun e-mail pré-inscrit pour le moment.</div>'; return; }
+  box.innerHTML = data.map(r => `
+    <div class="coord-row">
+      <div class="coord-row-main">
+        <div class="coord-row-email">${esc(r.email)}</div>
+        <span class="role-chip role-${r.role}">${esc(roleLabel(r.role))}</span>
+      </div>
+      <button class="coord-del" data-email="${esc(r.email)}" title="Retirer de la liste">✕</button>
+    </div>`).join('');
+  box.querySelectorAll('.coord-del').forEach(b =>
+    b.addEventListener('click', () => delPreattrib(b.dataset.email)));
+}
+
+async function addPreattrib() {
+  const email = $('coord-new-email').value.trim().toLowerCase();
+  const role = $('coord-new-role').value;
+  if (!email || !/.+@.+\..+/.test(email)) { $('coord-msg').textContent = 'Entre un e-mail valide.'; return; }
+  const { error } = await sb.from('roles_preattribues')
+    .upsert({ email, role, invite_par: currentUser.id }, { onConflict: 'email' });
+  if (error) { $('coord-msg').textContent = 'Erreur : ' + error.message; return; }
+  $('coord-new-email').value = '';
+  $('coord-msg').textContent = `${email} recevra le rôle « ${roleLabel(role)} » en créant son accès.`;
+  renderPreattrib();
+}
+
+async function delPreattrib(email) {
+  const { error } = await sb.from('roles_preattribues').delete().eq('email', email);
+  if (error) { $('coord-msg').textContent = 'Erreur : ' + error.message; return; }
+  $('coord-msg').textContent = `${email} retiré de la liste (les accès déjà créés ne sont pas supprimés).`;
+  renderPreattrib();
+}
+
+async function renderComptes() {
+  const { data, error } = await sb.from('profils').select('*').order('nom');
+  const box = $('coord-comptes-list');
+  if (error) { box.innerHTML = `<div class="coord-empty">Erreur : ${esc(error.message)}</div>`; return; }
+  if (!data.length) { box.innerHTML = '<div class="coord-empty">Aucun compte créé pour le moment.</div>'; return; }
+  box.innerHTML = data.map(p => `
+    <div class="coord-row">
+      <div class="coord-row-main">
+        <div class="coord-row-email">${esc(p.nom)} <span class="coord-row-sub">${esc(p.email)}</span></div>
+      </div>
+      <select class="coord-role-select" data-id="${esc(p.id)}">
+        ${ROLES.map(r => `<option value="${r.id}" ${r.id === p.role ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
+      </select>
+    </div>`).join('');
+  box.querySelectorAll('.coord-role-select').forEach(sel =>
+    sel.addEventListener('change', () => updateRole(sel.dataset.id, sel.value, sel)));
+}
+
+async function updateRole(id, role, sel) {
+  if (id === currentUser.id && role !== 'coordinateur') {
+    if (!confirm('Attention : tu vas retirer ton propre accès coordinateur. Tu ne pourras plus gérer les rôles. Continuer ?')) {
+      if (sel) sel.value = 'coordinateur';
+      return;
+    }
+  }
+  const { error } = await sb.from('profils').update({ role }).eq('id', id);
+  $('coord-msg').textContent = error ? ('Erreur : ' + error.message) : 'Rôle mis à jour.';
+}
+
+$('coord-btn').addEventListener('click', openCoord);
+$('close-coord-btn').addEventListener('click', () => { $('modal-coord').style.display = 'none'; });
+$('coord-add-btn').addEventListener('click', addPreattrib);
+$('coord-new-email').addEventListener('keydown', (e) => { if (e.key === 'Enter') addPreattrib(); });
 
 // ===== VUE LISTE DES FAMILLES =====
 

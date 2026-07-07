@@ -35,6 +35,8 @@
       <div class="topbar-brand">🧭 Diagnostic 360°</div>
       <div class="topbar-right">
         <span id="user-name" class="user-name"></span>
+        <button id="help-btn" class="btn-ghost" title="Guide des volets et des rôles">❔ Aide</button>
+        <button id="coord-btn" class="btn-ghost" title="Gérer les accès et les rôles" style="display:none">⚙ Coordination</button>
         <button id="logout-btn" class="btn-ghost">Se déconnecter</button>
       </div>
     </header>
@@ -90,6 +92,48 @@
       <div class="modal-actions">
         <button id="cancel-entry-btn" class="btn-ghost">Annuler</button>
         <button id="save-entry-btn" class="btn btn-primary">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODALE : aide / guide des volets ===== -->
+  <div id="modal-help" class="modal-backdrop" style="display:none">
+    <div class="modal modal-lg">
+      <h2>Guide de l'appli</h2>
+      <div id="help-body"></div>
+      <div class="modal-actions">
+        <button id="close-help-btn" class="btn btn-primary">J'ai compris</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODALE : coordination (coordinateur uniquement) ===== -->
+  <div id="modal-coord" class="modal-backdrop" style="display:none">
+    <div class="modal modal-lg">
+      <h2>Coordination — accès &amp; rôles</h2>
+
+      <section class="coord-section">
+        <h3 class="coord-h3">Pré-attribution des rôles</h3>
+        <p class="coord-help">Ajoute l'e-mail d'une personne et son rôle. Dès qu'elle clique
+          « Créer mon accès » avec cet e-mail, elle reçoit automatiquement le bon rôle. Un e-mail
+          absent de cette liste ne peut pas entrer.</p>
+        <div class="coord-add">
+          <input type="email" id="coord-new-email" class="input" placeholder="prenom.nom@enfaimsansfil.org">
+          <select id="coord-new-role" class="coord-role-select"></select>
+          <button id="coord-add-btn" class="btn btn-primary">Ajouter</button>
+        </div>
+        <div id="coord-preattrib-list" class="coord-list"></div>
+      </section>
+
+      <section class="coord-section">
+        <h3 class="coord-h3">Comptes déjà créés</h3>
+        <p class="coord-help">Change le rôle d'une personne qui a déjà son accès.</p>
+        <div id="coord-comptes-list" class="coord-list"></div>
+      </section>
+
+      <div id="coord-msg" class="coord-msg"></div>
+      <div class="modal-actions">
+        <button id="close-coord-btn" class="btn btn-primary">Fermer</button>
       </div>
     </div>
   </div>
