@@ -16,19 +16,13 @@
         <div class="brand-name">Diagnostic 360°</div>
         <div class="brand-sub">Pôle Familles · Enfance Sans Fil</div>
       </div>
-      <p class="login-hint">Connexion par code envoyé à ton adresse e-mail — pas de mot de passe à retenir.</p>
+      <p class="login-hint" id="login-mode-hint">Entre ton e-mail et ton mot de passe pour te connecter.</p>
 
-      <div id="step-email">
-        <input type="email" id="login-email" class="input" placeholder="ton-email@exemple.org" autocomplete="email">
-        <button id="login-btn" class="btn btn-primary">Recevoir mon code</button>
-      </div>
+      <input type="email" id="login-email" class="input" placeholder="ton-email@exemple.org" autocomplete="email">
+      <input type="password" id="login-password" class="input" placeholder="Mot de passe" autocomplete="current-password">
 
-      <div id="step-code" style="display:none">
-        <p class="login-hint" id="code-sent-to"></p>
-        <input type="text" id="login-code" class="input" placeholder="Code à 6 chiffres" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
-        <button id="verify-btn" class="btn btn-primary">Valider le code</button>
-        <button id="resend-btn" class="btn-ghost" style="width:100%; margin-top:8px">Renvoyer un code</button>
-      </div>
+      <button id="login-btn" class="btn btn-primary">Se connecter</button>
+      <button id="signup-toggle" class="btn-ghost" style="width:100%; margin-top:8px">Première fois ? Créer mon accès</button>
 
       <div id="login-msg" class="login-msg"></div>
       <div id="debug-panel" style="margin-top:16px; padding:10px; background:#f5f0e8; border:1px solid #ddd; border-radius:6px; font-family:monospace; font-size:11px; white-space:pre-wrap; text-align:left; display:none"></div>

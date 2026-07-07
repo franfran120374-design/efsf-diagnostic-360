@@ -121,62 +121,82 @@ function showLogin() {
   }
 }
 
-// Connexion par CODE à 6 chiffres plutôt que par lien cliquable : un lien
-// à usage unique est parfois "pré-visité" par les filtres de sécurité des
-// messageries pro (Microsoft/Google Workspace), ce qui le rend invalide
-// avant même que la personne ne clique dessus. Un code à recopier manuellement
-// ne peut pas être consommé de cette façon.
-let pendingEmail = null;
+// Connexion par e-mail + mot de passe : robuste et instantané, sans dépendre
+// de l'envoi d'e-mails (les codes/liens à usage unique étaient consommés par
+// les scanners de sécurité des messageries pro ou bloqués par le réseau).
+// Deux modes : "connexion" (compte existant) ou "création d'accès" (nouveau).
+let mode = 'login'; // 'login' | 'signup'
 
-async function sendCode() {
-  const email = $('login-email').value.trim();
-  if (!email) return;
-  pendingEmail = email;
-  $('login-btn').disabled = true;
-  $('login-msg').textContent = 'Envoi en cours…';
-  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
-  $('login-btn').disabled = false;
-  if (error) { $('login-msg').textContent = 'Erreur : ' + error.message; return; }
-  $('login-msg').textContent = '';
-  $('code-sent-to').textContent = `Code envoyé à ${email} — vérifie aussi les spams.`;
-  $('step-email').style.display = 'none';
-  $('step-code').style.display = 'block';
-  $('login-code').value = '';
-  $('login-code').focus();
-}
-
-$('login-btn').addEventListener('click', sendCode);
-$('resend-btn').addEventListener('click', sendCode);
-
-$('verify-btn').addEventListener('click', async () => {
-  const code = $('login-code').value.trim();
-  if (!code || !pendingEmail) return;
-  $('verify-btn').disabled = true;
-  $('login-msg').textContent = 'Vérification…';
-  debugLog('→ Vérification du code pour ' + pendingEmail);
-
-  // type: 'email' est le seul type correct pour un code envoyé par
-  // signInWithOtp (connexion ET première inscription) — un essai
-  // supplémentaire avec un mauvais type risquait de "consommer" le code
-  // à usage unique avant le bon essai, d'où la suppression du repli.
-  const { data, error } = await sb.auth.verifyOtp({ email: pendingEmail, token: code, type: 'email' });
-
-  $('verify-btn').disabled = false;
-  if (error) {
-    debugLog('✗ Code refusé — status:' + (error.status || '?') + ' code:' + (error.code || '?') + ' message:' + error.message);
-    $('login-msg').textContent = 'Code incorrect ou expiré : ' + error.message;
-    return;
+function setMode(m) {
+  mode = m;
+  if (m === 'signup') {
+    $('login-mode-hint').textContent = 'Choisis un mot de passe (min. 6 caractères) pour créer ton accès.';
+    $('login-btn').textContent = 'Créer mon accès';
+    $('signup-toggle').textContent = 'J\'ai déjà un accès — me connecter';
+    $('login-password').setAttribute('autocomplete', 'new-password');
+  } else {
+    $('login-mode-hint').textContent = 'Entre ton e-mail et ton mot de passe pour te connecter.';
+    $('login-btn').textContent = 'Se connecter';
+    $('signup-toggle').textContent = 'Première fois ? Créer mon accès';
+    $('login-password').setAttribute('autocomplete', 'current-password');
   }
   $('login-msg').textContent = '';
-  debugLog('✓ Code validé pour ' + data.user.email);
+}
+
+$('signup-toggle').addEventListener('click', () => setMode(mode === 'login' ? 'signup' : 'login'));
+
+async function submitAuth() {
+  const email = $('login-email').value.trim();
+  const password = $('login-password').value;
+  if (!email || !password) { $('login-msg').textContent = 'E-mail et mot de passe requis.'; return; }
+  if (mode === 'signup' && password.length < 6) { $('login-msg').textContent = 'Le mot de passe doit faire au moins 6 caractères.'; return; }
+
+  $('login-btn').disabled = true;
+  $('login-msg').textContent = mode === 'signup' ? 'Création…' : 'Connexion…';
+  debugLog('→ ' + (mode === 'signup' ? 'Création' : 'Connexion') + ' pour ' + email);
+
+  let data, error;
+  try {
+    if (mode === 'signup') {
+      ({ data, error } = await sb.auth.signUp({ email, password }));
+    } else {
+      ({ data, error } = await sb.auth.signInWithPassword({ email, password }));
+    }
+  } catch (e) { error = e; }
+
+  $('login-btn').disabled = false;
+
+  if (error) {
+    debugLog('✗ Échec — status:' + (error.status || '?') + ' code:' + (error.code || '?') + ' message:' + error.message);
+    // Messages plus clairs pour les cas fréquents
+    if (error.message && /already registered/i.test(error.message)) {
+      $('login-msg').textContent = 'Ce compte existe déjà — clique sur « J\'ai déjà un accès » pour te connecter.';
+    } else if (error.message && /Invalid login credentials/i.test(error.message)) {
+      $('login-msg').textContent = 'E-mail ou mot de passe incorrect.';
+    } else {
+      $('login-msg').textContent = 'Erreur : ' + error.message;
+    }
+    return;
+  }
+
+  if (!data.session) {
+    // Cas où la confirmation e-mail est encore activée côté Supabase
+    debugLog('✗ Pas de session (confirmation e-mail probablement activée)');
+    $('login-msg').textContent = 'Compte créé, mais la confirmation par e-mail est activée. Désactive-la dans Supabase pour une connexion directe.';
+    return;
+  }
+
+  $('login-msg').textContent = '';
+  debugLog('✓ Authentifié : ' + data.user.email);
   await onLoggedIn(data.user);
-});
+}
+
+$('login-btn').addEventListener('click', submitAuth);
+$('login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitAuth(); });
 
 $('logout-btn').addEventListener('click', async () => {
   await sb.auth.signOut();
   currentUser = null;
-  $('step-code').style.display = 'none';
-  $('step-email').style.display = 'block';
   showLogin();
 });
 
