@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Diagnostic 360° — Pôle Familles EFSF</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@600;700;800&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -12,9 +15,9 @@
   <div id="screen-login" class="screen">
     <div class="login-card">
       <div class="brand">
-        <div class="brand-mark">🧭</div>
+        <img class="brand-logo" data-logo alt="En Faim Sans Fil">
         <div class="brand-name">Diagnostic 360°</div>
-        <div class="brand-sub">Pôle Familles · Enfance Sans Fil</div>
+        <div class="brand-sub">Pôle Familles · En Faim Sans Fil</div>
       </div>
       <p class="login-hint" id="login-mode-hint">Entre ton e-mail et ton mot de passe pour te connecter.</p>
 
@@ -169,6 +172,7 @@
   <!-- Zone d'impression PDF (masquée à l'écran, visible seulement à l'impression) -->
   <div id="print-area" style="display:none"></div>
 
+  <script src="logo-efsf.js"></script>
   <script src="config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>

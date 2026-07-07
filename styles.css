@@ -25,8 +25,14 @@
 
   --radius: 10px;
   --shadow: 0 2px 10px rgba(40, 30, 20, 0.06);
-  --sans: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --serif: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+  /* Typos de la charte EFSF : League Spartan (titres), Montserrat (texte) */
+  --sans: 'Montserrat', -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --serif: 'League Spartan', 'Montserrat', -apple-system, "Segoe UI", sans-serif;
+  /* Couleurs exactes de la charte (pour le logo, le PDF, les accents forts) */
+  --charte-bleu: #7BCFF1;
+  --charte-rose: #FF686D;
+  --charte-orange: #FA9B5B;
+  --charte-vert: #BED496;
 }
 
 * { box-sizing: border-box; }
@@ -58,8 +64,8 @@ input { font-family: inherit; }
   width: 100%;
 }
 .brand { text-align: center; margin-bottom: 24px; }
-.brand-mark { font-size: 40px; margin-bottom: 8px; }
-.brand-name { font-family: var(--serif); font-size: 22px; font-weight: 700; }
+.brand-logo { width: 96px; height: auto; margin: 0 auto 10px; display: block; }
+.brand-name { font-family: var(--serif); font-size: 24px; font-weight: 700; letter-spacing: 0.3px; }
 .brand-sub { font-size: 13px; color: var(--ink-mid); margin-top: 2px; }
 .login-hint { font-size: 13px; color: var(--ink-mid); text-align: center; margin-bottom: 20px; }
 .login-msg { font-size: 13px; text-align: center; margin-top: 12px; color: var(--ink-mid); min-height: 18px; }
@@ -362,24 +368,77 @@ textarea.input.big { min-height: 120px; }
 .checkbox-line.big { font-size: 16px; margin-bottom: 20px; gap: 12px; }
 .checkbox-line.big input { width: 20px; height: 20px; }
 
-/* ===== Impression PDF ===== */
-#print-area { color: #000; background: #fff; }
-.pa-head { border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 16px; }
-.pa-title { font-size: 18px; font-weight: 700; }
-.pa-sub { font-size: 13px; margin-top: 4px; }
-.pa-volet { margin-bottom: 14px; page-break-inside: avoid; }
-.pa-volet h3 { font-size: 14px; margin: 0 0 6px; border-bottom: 1px solid #999; padding-bottom: 3px; }
-.pa-champ { font-size: 12.5px; margin: 3px 0; }
+/* ===== Impression PDF (charte EFSF) ===== */
+#print-area { color: #2b2825; background: #fff; font-family: var(--sans); }
+.pa-head {
+  display: flex; align-items: center; gap: 16px;
+  padding-bottom: 12px; margin-bottom: 6px;
+  border-bottom: 4px solid var(--charte-bleu);
+}
+.pa-logo { width: 68px; height: auto; flex-shrink: 0; }
+.pa-asso {
+  font-family: var(--serif); font-weight: 800; font-size: 22px;
+  letter-spacing: 0.3px; color: #4a9bc2;
+}
+.pa-doc-title { font-size: 13px; color: #6b6560; margin-top: 2px; font-weight: 600; }
+.pa-accent { display: flex; height: 5px; margin-bottom: 14px; }
+.pa-accent > span { flex: 1; }
+.pa-accent .a1 { background: var(--charte-bleu); }
+.pa-accent .a2 { background: var(--charte-rose); }
+.pa-accent .a3 { background: var(--charte-orange); }
+.pa-accent .a4 { background: var(--charte-vert); }
+.pa-meta {
+  font-size: 12.5px; color: #2b2825; margin-bottom: 16px;
+  display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center;
+}
+.pa-meta b { font-weight: 700; }
+.pa-conso {
+  margin-left: auto; font-size: 11px; font-weight: 700;
+  padding: 2px 10px; border-radius: 100px;
+  background: #eef3e6; color: #6f9146;
+}
+.pa-conso.manquant { background: #fbebec; color: #e0555e; }
+.pa-volet {
+  margin-bottom: 12px; page-break-inside: avoid;
+  border-left: 4px solid #ccc; padding: 2px 0 2px 12px;
+}
+.pa-volet.c-bleu   { border-color: var(--charte-bleu); }
+.pa-volet.c-rose   { border-color: var(--charte-rose); }
+.pa-volet.c-orange { border-color: var(--charte-orange); }
+.pa-volet.c-vert   { border-color: var(--charte-vert); }
+.pa-volet.c-violet { border-color: #b9a7d9; }
+.pa-volet h3 {
+  font-family: var(--serif); font-weight: 700; font-size: 14px;
+  margin: 0 0 5px; letter-spacing: 0.2px;
+}
+.pa-champ { font-size: 12px; margin: 2px 0; }
 .pa-k { font-weight: 700; }
-.pa-empty { font-size: 12px; color: #888; font-style: italic; }
-.pa-foot { margin-top: 20px; padding-top: 10px; border-top: 1px solid #999; font-size: 10.5px; color: #444; }
+.pa-empty { font-size: 11.5px; color: #999; font-style: italic; }
+
+.pa-signatures { margin-top: 20px; page-break-inside: avoid; }
+.pa-signatures h3 {
+  font-family: var(--serif); font-weight: 700; font-size: 14px;
+  margin: 0 0 10px; padding-bottom: 5px; border-bottom: 2px solid var(--charte-bleu);
+}
+.pa-sign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pa-sign {
+  border: 1px solid #e7e0d6; border-radius: 8px; padding: 10px 12px;
+}
+.pa-sign-role { font-weight: 700; font-size: 12px; margin-bottom: 8px; color: #4a9bc2; }
+.pa-sign-name { font-size: 11px; color: #6b6560; margin-bottom: 22px; }
+.pa-sign-space { font-size: 10px; color: #a29c95; border-top: 1px dotted #b8b0a5; padding-top: 3px; }
+
+.pa-foot {
+  margin-top: 18px; padding-top: 10px; border-top: 1px solid #e7e0d6;
+  font-size: 10px; color: #6b6560; line-height: 1.5;
+}
 
 @media print {
+  @page { margin: 12mm; }
   body * { visibility: hidden; }
   #print-area, #print-area * { visibility: visible; }
   #print-area {
     display: block !important;
     position: absolute; left: 0; top: 0; width: 100%;
-    padding: 0 6mm;
   }
 }

@@ -725,17 +725,50 @@ async function exportPdf() {
       .filter(ch => c[ch.key] !== undefined && c[ch.key] !== '' && c[ch.key] !== false)
       .map(ch => `<div class="pa-champ"><span class="pa-k">${esc(ch.label)} :</span> ${ch.type === 'checkbox' ? 'Oui' : esc(c[ch.key])}</div>`)
       .join('') : '';
-    return `<div class="pa-volet"><h3>${esc(v.label)}</h3>${lignes || '<div class="pa-empty">— non renseigné —</div>'}</div>`;
+    return `<div class="pa-volet c-${v.color}"><h3>${esc(v.label)}</h3>${lignes || '<div class="pa-empty">— non renseigné —</div>'}</div>`;
   }).join('');
+
+  const logo = window.LOGO_EFSF ? `<img class="pa-logo" src="${window.LOGO_EFSF}" alt="">` : '';
+  const consoClass = famille.consentement_recueilli ? '' : 'manquant';
+  const consoTxt = famille.consentement_recueilli
+    ? 'Consentement recueilli' + (famille.consentement_date ? ' le ' + esc(famille.consentement_date) : '')
+    : 'Consentement à recueillir';
+
+  const signatures = [
+    'Parent(s) / responsable légal',
+    'Bénévole référent',
+    'Coordinateur / coordinatrice',
+    'Président(e)'
+  ].map(role => `
+    <div class="pa-sign">
+      <div class="pa-sign-role">${esc(role)}</div>
+      <div class="pa-sign-name">Nom : ____________________</div>
+      <div class="pa-sign-space">Signature &amp; date</div>
+    </div>`).join('');
 
   $('print-area').innerHTML = `
     <div class="pa-head">
-      <div class="pa-title">Diagnostic 360° — Pôle Familles EFSF</div>
-      <div class="pa-sub">${esc(famille.code_famille)} — ${esc(famille.prenom_enfant || '')} · édité le ${esc(today)}</div>
+      ${logo}
+      <div class="pa-head-txt">
+        <div class="pa-asso">En Faim Sans Fil</div>
+        <div class="pa-doc-title">Diagnostic 360° — Pôle Accompagnement Familles</div>
+      </div>
+    </div>
+    <div class="pa-accent"><span class="a1"></span><span class="a2"></span><span class="a3"></span><span class="a4"></span></div>
+    <div class="pa-meta">
+      <span><b>Famille</b> ${esc(famille.code_famille)}</span>
+      <span><b>Enfant</b> ${esc(famille.prenom_enfant || '—')}</span>
+      <span><b>Édité le</b> ${esc(today)}</span>
+      <span class="pa-conso ${consoClass}">${consoTxt}</span>
     </div>
     ${voletsHtml}
-    <div class="pa-foot">Document confidentiel — données de santé. À conserver dans un espace sécurisé
-    et à détruire selon votre politique de conservation. Aucun nom de famille complet n'y figure.</div>`;
+    <div class="pa-signatures">
+      <h3>Validation &amp; signatures</h3>
+      <div class="pa-sign-grid">${signatures}</div>
+    </div>
+    <div class="pa-foot">Document confidentiel — données de santé. Aucun nom de famille complet n'y figure
+    (code famille + prénom uniquement). À conserver dans un espace sécurisé et à détruire selon la politique
+    de conservation de l'association. En Faim Sans Fil — Pôle Accompagnement Familles.</div>`;
   $('print-area').style.display = 'block';
 
   await sb.from('journal_acces').insert({ famille_id: currentFamilleId, profil_id: currentUser.id, action: 'export_pdf' });
@@ -769,4 +802,6 @@ $('effacer-sante-btn').addEventListener('click', effacerDonneesSante);
 $('supprimer-fiche-btn').addEventListener('click', supprimerFiche);
 
 // ===== DÉMARRAGE =====
+// Logo de la charte (base64 dans logo-efsf.js) sur tous les emplacements marqués.
+document.querySelectorAll('[data-logo]').forEach(el => { if (window.LOGO_EFSF) el.src = window.LOGO_EFSF; });
 initSession();
