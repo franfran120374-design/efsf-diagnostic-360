@@ -123,6 +123,39 @@ as $$
   );
 $$;
 
+-- Fonctions "croisées" en SECURITY DEFINER : elles lisent familles/acces_volets
+-- en CONTOURNANT la RLS. Sans elles, une policy sur `familles` qui interroge
+-- `acces_volets` (dont la policy réinterroge `familles`) provoque une
+-- « infinite recursion detected in policy ». Les passer par ces fonctions
+-- casse la boucle.
+create or replace function mon_role()
+returns role_type language sql security definer stable set search_path = public as $$
+  select role from profils where id = auth.uid();
+$$;
+
+create or replace function est_referent(fid uuid)
+returns boolean language sql security definer stable set search_path = public as $$
+  select exists (select 1 from familles where id = fid and referent_id = auth.uid());
+$$;
+
+create or replace function a_acces_famille(fid uuid)
+returns boolean language sql security definer stable set search_path = public as $$
+  select exists (select 1 from acces_volets where famille_id = fid and profil_id = auth.uid());
+$$;
+
+create or replace function a_acces_volet(fid uuid, v volet_type)
+returns boolean language sql security definer stable set search_path = public as $$
+  select exists (select 1 from acces_volets where famille_id = fid and profil_id = auth.uid() and volet = v);
+$$;
+
+create or replace function peut_modifier_volet(fid uuid, v volet_type)
+returns boolean language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from acces_volets
+    where famille_id = fid and profil_id = auth.uid() and volet = v and peut_modifier = true
+  );
+$$;
+
 -- À la création d'un compte (auth.users), crée le profil SEULEMENT si
 -- l'e-mail a été pré-inscrit, en appliquant le rôle pré-attribué.
 -- SECURITY DEFINER : peut lire roles_preattribues et écrire profils.
@@ -191,14 +224,11 @@ create policy "preattrib_coordinateur" on roles_preattribues for all
 create policy "familles_select" on familles for select using (
   is_coordinateur()
   or referent_id = auth.uid()
-  or exists (select 1 from acces_volets a where a.famille_id = familles.id and a.profil_id = auth.uid())
+  or a_acces_famille(id)
 );
 create policy "familles_insert" on familles for insert with check (
   is_coordinateur()
-  or (
-    exists (select 1 from profils p where p.id = auth.uid() and p.role = 'benevole_referent')
-    and referent_id = auth.uid()
-  )
+  or (mon_role() = 'benevole_referent' and referent_id = auth.uid())
 );
 create policy "familles_update" on familles for update
   using (is_coordinateur() or referent_id = auth.uid())
@@ -208,15 +238,15 @@ create policy "familles_update" on familles for update
 create policy "acces_volets_select" on acces_volets for select using (
   profil_id = auth.uid()
   or is_coordinateur()
-  or exists (select 1 from familles f where f.id = acces_volets.famille_id and f.referent_id = auth.uid())
+  or est_referent(famille_id)
 );
 create policy "acces_volets_insert" on acces_volets for insert with check (
   is_coordinateur()
-  or exists (select 1 from familles f where f.id = famille_id and f.referent_id = auth.uid())
+  or est_referent(famille_id)
 );
 create policy "acces_volets_delete" on acces_volets for delete using (
   is_coordinateur()
-  or exists (select 1 from familles f where f.id = acces_volets.famille_id and f.referent_id = auth.uid())
+  or est_referent(famille_id)
 );
 
 -- --- volet_entries ---
@@ -224,26 +254,15 @@ create policy "acces_volets_delete" on acces_volets for delete using (
 -- Un contributeur : seulement les volets où il est explicitement rattaché.
 create policy "volet_entries_select" on volet_entries for select using (
   is_coordinateur()
-  or exists (select 1 from familles f where f.id = volet_entries.famille_id and f.referent_id = auth.uid())
-  or exists (
-    select 1 from acces_volets a
-    where a.famille_id = volet_entries.famille_id
-      and a.profil_id = auth.uid()
-      and a.volet = volet_entries.volet
-  )
+  or est_referent(famille_id)
+  or a_acces_volet(famille_id, volet)
 );
 create policy "volet_entries_insert" on volet_entries for insert with check (
   auteur_id = auth.uid()
   and (
     is_coordinateur()
-    or exists (select 1 from familles f where f.id = famille_id and f.referent_id = auth.uid())
-    or exists (
-      select 1 from acces_volets a
-      where a.famille_id = volet_entries.famille_id
-        and a.profil_id = auth.uid()
-        and a.volet = volet_entries.volet
-        and a.peut_modifier = true
-    )
+    or est_referent(famille_id)
+    or peut_modifier_volet(famille_id, volet)
   )
 );
 
