@@ -719,13 +719,17 @@ async function exportPdf() {
   const latest = latestByVolet(entries);
   const today = new Date().toLocaleDateString('fr-FR');
 
-  const voletsHtml = VOLETS.map(v => {
+  const voletsHtml = VOLETS.map((v, i) => {
     const c = latest[v.id];
     const lignes = c ? v.champs
       .filter(ch => c[ch.key] !== undefined && c[ch.key] !== '' && c[ch.key] !== false)
       .map(ch => `<div class="pa-champ"><span class="pa-k">${esc(ch.label)} :</span> ${ch.type === 'checkbox' ? 'Oui' : esc(c[ch.key])}</div>`)
       .join('') : '';
-    return `<div class="pa-volet c-${v.color}"><h3>${esc(v.label)}</h3>${lignes || '<div class="pa-empty">— non renseigné —</div>'}</div>`;
+    const reco = v.reco ? `<div class="pa-reco">${esc(v.reco)}</div>` : '';
+    return `<div class="pa-volet c-${v.color}">
+      <div class="pa-volet-head"><span class="pa-volet-num">${i + 1}</span><h3>${esc(v.label)}</h3></div>
+      <div class="pa-volet-body">${reco}${lignes || '<div class="pa-empty">— non renseigné à ce jour —</div>'}</div>
+    </div>`;
   }).join('');
 
   const logo = window.LOGO_EFSF ? `<img class="pa-logo" src="${window.LOGO_EFSF}" alt="">` : '';
@@ -761,7 +765,28 @@ async function exportPdf() {
       <span><b>Édité le</b> ${esc(today)}</span>
       <span class="pa-conso ${consoClass}">${consoTxt}</span>
     </div>
+    <div class="pa-intro">
+      <p>Ce dossier synthétise l'accompagnement global de la famille par le Pôle Familles
+      d'<b>En Faim Sans Fil</b>, sur les 7 volets du diagnostic 360°. Il sert de support à l'entretien,
+      de relais entre bénévoles et d'appui à l'orientation vers les professionnels.</p>
+      <p class="pa-cadre"><b>Cadre du bénévole&nbsp;:</b> écoute active et empathique, partage d'expérience
+      (pair-aidance), information sur les ressources, rupture de l'isolement. Le bénévole ne pose pas de
+      diagnostic, ne donne pas de conseil médical et ne remplace pas les professionnels de santé&nbsp;: il
+      oriente dès que nécessaire.</p>
+    </div>
     ${voletsHtml}
+    <div class="pa-ressources">
+      <h3>Repères &amp; ressources</h3>
+      <div class="pa-urgence">🚨 <b>Détresse ou urgence&nbsp;:</b> 3114 (prévention du suicide, 24h/24)
+      · SAMU 15 si danger imminent · prévenir sans délai le coordinateur du Pôle Familles.</div>
+      <div class="pa-ressource-grid">
+        <div class="pa-ressource"><b>CHU Toulouse — Hôpital des Enfants</b><span>05 34 55 85 55</span></div>
+        <div class="pa-ressource"><b>CAMSP Toulouse Centre</b><span>05 61 77 90 00</span></div>
+        <div class="pa-ressource"><b>Maison des Adolescents</b><span>05 34 39 40 70</span></div>
+        <div class="pa-ressource"><b>MDPH Haute-Garonne</b><span>0 800 31 01 31</span></div>
+        <div class="pa-ressource"><b>HAD Santé Service Toulouse</b><span>05 61 50 50 50</span></div>
+      </div>
+    </div>
     <div class="pa-signatures">
       <h3>Validation &amp; signatures</h3>
       <div class="pa-sign-grid">${signatures}</div>

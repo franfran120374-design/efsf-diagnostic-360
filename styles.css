@@ -398,22 +398,82 @@ textarea.input.big { min-height: 120px; }
   background: #eef3e6; color: #6f9146;
 }
 .pa-conso.manquant { background: #fbebec; color: #e0555e; }
+/* Intro / cadre du bénévole */
+.pa-intro {
+  font-size: 11.5px; line-height: 1.5; color: #3a352f; margin-bottom: 16px;
+}
+.pa-intro p { margin: 0 0 6px; }
+.pa-cadre {
+  background: #f6f2ea; border-left: 3px solid var(--charte-orange);
+  padding: 7px 10px; border-radius: 0 6px 6px 0;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+
+/* Volets : bandeau coloré + fond teinté charte */
 .pa-volet {
-  margin-bottom: 12px; page-break-inside: avoid;
-  border-left: 4px solid #ccc; padding: 2px 0 2px 12px;
+  margin-bottom: 11px; page-break-inside: avoid;
+  border-radius: 8px; overflow: hidden;
+  border: 1px solid #e7e0d6;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
-.pa-volet.c-bleu   { border-color: var(--charte-bleu); }
-.pa-volet.c-rose   { border-color: var(--charte-rose); }
-.pa-volet.c-orange { border-color: var(--charte-orange); }
-.pa-volet.c-vert   { border-color: var(--charte-vert); }
-.pa-volet.c-violet { border-color: #b9a7d9; }
-.pa-volet h3 {
+.pa-volet-head {
+  display: flex; align-items: center; gap: 9px;
+  padding: 6px 12px;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.pa-volet-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(255,255,255,.65); color: #3a352f;
+  font-weight: 800; font-size: 11px;
+}
+.pa-volet-head h3 {
   font-family: var(--serif); font-weight: 700; font-size: 14px;
-  margin: 0 0 5px; letter-spacing: 0.2px;
+  margin: 0; letter-spacing: 0.2px; color: #2b2825;
 }
+.pa-volet-body { padding: 8px 12px 9px; }
+.pa-reco {
+  font-size: 10.5px; line-height: 1.45; color: #5a544d;
+  font-style: italic; margin-bottom: 6px;
+  padding-bottom: 6px; border-bottom: 1px dotted #ddd5c8;
+}
+/* Teintes de fond (pastel) + bandeau (couleur pleine) */
+.pa-volet.c-bleu   { background: #eaf7fd; }
+.pa-volet.c-bleu   .pa-volet-head { background: var(--charte-bleu); }
+.pa-volet.c-rose   { background: #ffecee; }
+.pa-volet.c-rose   .pa-volet-head { background: var(--charte-rose); }
+.pa-volet.c-rose   .pa-volet-head h3 { color: #fff; }
+.pa-volet.c-orange { background: #fef1e6; }
+.pa-volet.c-orange .pa-volet-head { background: var(--charte-orange); }
+.pa-volet.c-vert   { background: #f2f7ea; }
+.pa-volet.c-vert   .pa-volet-head { background: var(--charte-vert); }
+.pa-volet.c-violet { background: #f2eefa; }
+.pa-volet.c-violet .pa-volet-head { background: #c9b8e6; }
 .pa-champ { font-size: 12px; margin: 2px 0; }
 .pa-k { font-weight: 700; }
-.pa-empty { font-size: 11.5px; color: #999; font-style: italic; }
+.pa-empty { font-size: 11.5px; color: #8a847c; font-style: italic; }
+
+/* Repères & ressources */
+.pa-ressources { margin-top: 18px; page-break-inside: avoid; }
+.pa-ressources h3 {
+  font-family: var(--serif); font-weight: 700; font-size: 14px;
+  margin: 0 0 8px; padding-bottom: 5px; border-bottom: 2px solid var(--charte-orange);
+}
+.pa-urgence {
+  font-size: 11px; line-height: 1.45; color: #8a2b2f;
+  background: #fbeced; border-radius: 6px; padding: 7px 10px; margin-bottom: 9px;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.pa-ressource-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px;
+}
+.pa-ressource {
+  font-size: 10.5px; color: #3a352f;
+  display: flex; justify-content: space-between; gap: 8px;
+  padding: 4px 8px; background: #f6f2ea; border-radius: 5px;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.pa-ressource span { color: #6b6560; white-space: nowrap; }
 
 .pa-signatures { margin-top: 20px; page-break-inside: avoid; }
 .pa-signatures h3 {
@@ -436,7 +496,10 @@ textarea.input.big { min-height: 120px; }
 @media print {
   @page { margin: 12mm; }
   body * { visibility: hidden; }
-  #print-area, #print-area * { visibility: visible; }
+  #print-area, #print-area * {
+    visibility: visible;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
   #print-area {
     display: block !important;
     position: absolute; left: 0; top: 0; width: 100%;
