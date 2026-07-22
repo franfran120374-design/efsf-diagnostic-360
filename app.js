@@ -5,7 +5,7 @@
 
 const sb = window.supabase.createClient(window.SUPABASE_CONFIG.url, window.SUPABASE_CONFIG.anonKey);
 
-// Les 7 volets du diagnostic — modifie ce tableau pour ajuster les champs
+// Les volets du diagnostic — modifie ce tableau pour ajuster les champs
 // sans toucher au reste de la logique.
 // ⚠️ SOURCE UNIQUE : la popup d'aide (bouton « ❔ Aide ») est générée à partir
 // de ce tableau. Ajouter/retirer un volet ou un champ met l'aide à jour tout
@@ -33,8 +33,8 @@ const VOLETS = [
     { key: 'notes', label: 'Notes & points de vigilance', type: 'textarea',
       aide: "Reflux, vomissements, courbe de poids, fatigue…" }
   ]},
-  { id: 'psychologique', label: 'Psychologique & oralité', color: 'rose',
-    reco: "L'oralité est souvent perturbée après une nutrition artificielle. On regarde le rapport de l'enfant à la nourriture ET le vécu psychologique des parents.",
+  { id: 'psychologique', label: 'Psychologique & oralité — Enfant', color: 'rose',
+    reco: "L'oralité est souvent perturbée après une nutrition artificielle. On regarde le rapport de l'enfant à la nourriture et son suivi psy propre.",
     champs: [
     { key: 'troubles_oralite', label: "Troubles de l'oralité", type: 'select',
       aide: "Oralité = tout ce qui touche la bouche : manger, goûter, porter à la bouche. Des blocages sont fréquents après une sonde.",
@@ -44,8 +44,41 @@ const VOLETS = [
     { key: 'type_suivi', label: 'Professionnel qui accompagne', type: 'select',
       aide: "Qui suit l'enfant pour l'oralité / le développement.",
       options: ['Orthophoniste', 'Psychologue', 'Psychomotricien', 'Ergothérapeute', 'Autre'] },
-    { key: 'suivi_parents', label: 'Soutien psychologique des parents', type: 'select',
+    { key: 'notes', label: 'Notes', type: 'textarea' }
+  ]},
+  { id: 'psychologique_mere', label: 'Psychologique — Mère', color: 'rose',
+    reco: "Le vécu de la mère face au sevrage/à la maladie de l'enfant, souvent en première ligne des soins au quotidien.",
+    champs: [
+    { key: 'etat_mere', label: 'État général repéré', type: 'select',
+      options: ['Serein', 'Fatigue morale', 'Anxiété', 'Détresse repérée'] },
+    { key: 'suivi_mere', label: 'Soutien psychologique', type: 'select',
       options: ['Aucun', 'Souhaité', 'En cours'] },
+    { key: 'type_suivi_mere', label: 'Type de soutien', type: 'select',
+      options: ['Psychologue', 'Groupe de parole', 'Association de parents', 'Autre'] },
+    { key: 'notes', label: 'Notes', type: 'textarea' }
+  ]},
+  { id: 'psychologique_pere', label: 'Psychologique — Père', color: 'rose',
+    reco: "Le vécu du père est parfois moins spontanément exprimé — à explorer explicitement plutôt que supposer qu'il va bien.",
+    champs: [
+    { key: 'etat_pere', label: 'État général repéré', type: 'select',
+      options: ['Serein', 'Fatigue morale', 'Anxiété', 'Détresse repérée'] },
+    { key: 'suivi_pere', label: 'Soutien psychologique', type: 'select',
+      options: ['Aucun', 'Souhaité', 'En cours'] },
+    { key: 'type_suivi_pere', label: 'Type de soutien', type: 'select',
+      options: ['Psychologue', 'Groupe de parole', 'Association de parents', 'Autre'] },
+    { key: 'notes', label: 'Notes', type: 'textarea' }
+  ]},
+  { id: 'sommeil', label: 'Sommeil', color: 'orange',
+    reco: "Le sommeil est souvent perturbé par les soins nocturnes (pompe, sonde) ou l'inconfort digestif. Repérer la fatigue de l'enfant et des parents.",
+    champs: [
+    { key: 'qualite_sommeil', label: "Qualité du sommeil de l'enfant", type: 'select',
+      options: ['Bon', 'Réveils fréquents', "Difficultés d'endormissement", 'Très perturbé'] },
+    { key: 'cause_perturbation', label: 'Cause principale si perturbé', type: 'text',
+      aide: "Ex : pompe nutrition nocturne, reflux, angoisse, douleur." },
+    { key: 'suivi_sommeil', label: 'Prise en charge spécifique', type: 'select',
+      options: ['Aucune', 'Souhaitée', 'En cours'] },
+    { key: 'fatigue_parents', label: 'Fatigue des parents liée au sommeil', type: 'select',
+      options: ['Non', 'Modérée', 'Importante'] },
     { key: 'notes', label: 'Notes', type: 'textarea' }
   ]},
   { id: 'social', label: 'Social & familial', color: 'vert',
@@ -141,7 +174,7 @@ function roleLabel(id) { const r = ROLES.find(r => r.id === id); return r ? r.la
 // Date de la dernière évolution du contenu du guide (à bumper quand on
 // change le texte d'intro / confidentialité — pas nécessaire pour les
 // volets/rôles, qui se régénèrent seuls).
-const GUIDE_MAJ = '7 juillet 2026 (volets enrichis : menus déroulants, aides, glossaire)';
+const GUIDE_MAJ = '22 juillet 2026 (volet Sommeil ajouté, volet Psychologique séparé Enfant/Mère/Père)';
 
 let currentUser = null;
 let currentFamilleId = null;
@@ -487,6 +520,27 @@ $('save-famille-btn').addEventListener('click', async () => {
   showListView();
 });
 
+// ===== TEMPS RÉEL — voir les modifs des autres sans recharger =====
+// S'abonne aux nouvelles entrées de volet_entries pour la famille ouverte.
+// Nécessite d'avoir activé la réplication sur volet_entries dans
+// Supabase → Database → Replication.
+
+let voletsChannel = null;
+
+function subscribeVoletsRealtime(familleId) {
+  unsubscribeVoletsRealtime();
+  voletsChannel = sb.channel(`volets-${familleId}`)
+    .on('postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'volet_entries', filter: `famille_id=eq.${familleId}` },
+      () => renderVolets(familleId)
+    )
+    .subscribe();
+}
+
+function unsubscribeVoletsRealtime() {
+  if (voletsChannel) { sb.removeChannel(voletsChannel); voletsChannel = null; }
+}
+
 // ===== VUE FICHE FAMILLE =====
 
 async function openFamille(familleId) {
@@ -503,9 +557,10 @@ async function openFamille(familleId) {
 
   await sb.from('journal_acces').insert({ famille_id: familleId, profil_id: currentUser.id, action: 'consultation' });
   await renderVolets(familleId);
+  subscribeVoletsRealtime(familleId);
 }
 
-$('back-btn').addEventListener('click', showListView);
+$('back-btn').addEventListener('click', () => { unsubscribeVoletsRealtime(); showListView(); });
 
 async function renderVolets(familleId) {
   const { data: entries } = await sb.from('volet_entries')
@@ -597,7 +652,7 @@ $('save-entry-btn').addEventListener('click', async () => {
 });
 
 // ===== MODE ENTRETIEN (assistant pas à pas) =====
-// Déroule les 7 volets un par un, grands champs préremplis, pensé pour
+// Déroule les volets un par un, grands champs préremplis, pensé pour
 // conduire l'entretien en visio. « Terminer » enregistre tout d'un coup.
 
 let entretienStep = 0;
@@ -767,7 +822,7 @@ async function exportPdf() {
     </div>
     <div class="pa-intro">
       <p>Ce dossier synthétise l'accompagnement global de la famille par le Pôle Familles
-      d'<b>En Faim Sans Fil</b>, sur les 7 volets du diagnostic 360°. Il sert de support à l'entretien,
+      d'<b>En Faim Sans Fil</b>, sur les ${VOLETS.length} volets du diagnostic 360°. Il sert de support à l'entretien,
       de relais entre bénévoles et d'appui à l'orientation vers les professionnels.</p>
       <p class="pa-cadre"><b>Cadre du bénévole&nbsp;:</b> écoute active et empathique, partage d'expérience
       (pair-aidance), information sur les ressources, rupture de l'isolement. Le bénévole ne pose pas de
@@ -805,7 +860,7 @@ window.addEventListener('afterprint', () => { const pa = $('print-area'); if (pa
 
 async function effacerDonneesSante() {
   if (!confirm(
-    "⚠️ Effacer DÉFINITIVEMENT le contenu des 7 volets de cette famille (données de santé) ?\n\n" +
+    "⚠️ Effacer DÉFINITIVEMENT le contenu des volets de cette famille (données de santé) ?\n\n" +
     "La fiche (code, prénom, consentement) est conservée, vide.\n\n" +
     "As-tu bien exporté le PDF AVANT ? Cette action est irréversible.")) return;
   const { error } = await sb.rpc('effacer_donnees_sante', { fid: currentFamilleId });
